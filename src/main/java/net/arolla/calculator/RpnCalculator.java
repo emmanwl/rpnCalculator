@@ -1,68 +1,85 @@
 package net.arolla.calculator;
 
 
+import com.google.common.base.Joiner;
 import com.google.common.collect.ImmutableList;
 
-import java.util.Arrays;
+import java.util.ArrayList;
 import java.util.List;
 
-import static com.google.common.base.Preconditions.checkArgument;
+import static com.google.common.base.Preconditions.checkState;
 import static java.lang.String.valueOf;
+import static java.util.Arrays.asList;
 
 public class RpnCalculator {
 
     private static final List<String> OPERATORS = ImmutableList.of("+", "-", "*", "/");
     private static final String RPN_TOKEN_SEPARATOR = " ";
+    private static final String VALID_REDUCED_RPN_EXPRESSION_REGEXP = "^[-|+]?\\d+(\\s[-|+]?\\d+)*$";
 
-    public String evaluate(String expression) {
-        checkArgument(expression != null && expression.length() >=3, "Invalid rpn expression: " + expression);
-        return evaluate(Arrays.asList(expression.split(RPN_TOKEN_SEPARATOR)));
+    public String evaluate(String expression) throws InvalidRpnSyntaxException {
+        checkState(expression != null);
+        return evaluate(asList(expression.split(RPN_TOKEN_SEPARATOR)));
     }
 
-    private String evaluate(List<String> tokens) {
-        Integer index = tokens.size() - 1;
-        String operator = tokens.get(index);
-        checkArgument(isOperator(operator), "Unknown operator " + operator);
-        List<String> allExceptLast = tokens.subList(0, index);
-        return computeSimple(
-                evaluateLeftOperand(allExceptLast),
-                operator,
-                evaluateRightOperandRecursively(allExceptLast));
-    }
-
-    private String evaluateLeftOperand(List<String> tokens) {
-        if (tokens.size() == 2) {
-            return tokens.get(0);
+    private int firstIndexOfAnyOperator(List<String> tokens) {
+        int min = tokens.indexOf(OPERATORS.get(0));
+        for (int i = 1; i < OPERATORS.size(); i++) {
+            int index = tokens.indexOf(OPERATORS.get(i));
+            if (index != -1 && (index < min || min == -1)) {
+                min = index;
+            }
         }
-        if (isOperator(tokens.get(2))) {
-            return computeSimple(tokens.get(0), tokens.get(2), tokens.get(1));
-        }
-        return tokens.get(0);
+        return min;
     }
 
-    private String evaluateRightOperandRecursively(List<String> tokens) {
-        if (tokens.size() == 2) {
-            return tokens.get(1);
+    private List<String> reduce(List<String> tokens) throws InvalidRpnSyntaxException {
+        if (tokens.size() == 1) {
+            return tokens;
         }
-        if (isOperator(tokens.get(2))) {
-            return evaluate(tokens.subList(3, tokens.size()));
+        int index = firstIndexOfAnyOperator(tokens);
+        if (index == -1) {
+            return tokens;
+        } else if (index < 2) {
+            throw new InvalidRpnSyntaxException("Invalid RPN expression: [" + tokens.get(0) + " " + tokens.get(1) + "]");
         }
-        return evaluate(tokens.subList(1, tokens.size()));
+        List<String> newList = new ArrayList<>();
+        if (index >= 3) {
+            newList.addAll(tokens.subList(0, index - 2));
+        }
+        newList.add(computeSimple(tokens.get(index - 2), tokens.get(index), tokens.get(index - 1)));
+        if (index < tokens.size() - 1) {
+            newList.addAll(tokens.subList(index + 1, tokens.size()));
+        }
+        return reduce(newList);
     }
 
-    private boolean isOperator(String operator) {
-        return OPERATORS.contains(operator);
+    private String evaluate(List<String> tokens) throws InvalidRpnSyntaxException {
+        List<String> reduced = reduce(new ArrayList<>(tokens));
+        String joined = Joiner.on(" ").join(reduced);
+        if (!joined.matches(VALID_REDUCED_RPN_EXPRESSION_REGEXP)) {
+            throw new InvalidRpnSyntaxException("Invalid RPN expression: " + joined);
+        }
+        return joined;
     }
 
-    private String computeSimple(String leftOperand, String operator, String rightOperand) {
-        Integer left = Integer.valueOf(leftOperand);
-        Integer right = Integer.valueOf(rightOperand);
+    private Integer toInteger(String number) throws InvalidRpnSyntaxException {
+        try {
+            return Integer.valueOf(number);
+        } catch (NumberFormatException e) {
+            throw new InvalidRpnSyntaxException(e.getMessage());
+        }
+    }
+
+    private String computeSimple(String leftOperand, String operator, String rightOperand) throws InvalidRpnSyntaxException {
+        Integer left = toInteger(leftOperand);
+        Integer right = toInteger(rightOperand);
         switch (operator) {
             case "/" : return valueOf(left / right);
             case "-" : return valueOf(left - right);
             case "*" : return valueOf(left * right);
             case "+" : return valueOf(left + right);
-            default: return "Undefined";
+            default: throw new InvalidRpnSyntaxException("Unknown operator " + operator);
         }
     }
 }
