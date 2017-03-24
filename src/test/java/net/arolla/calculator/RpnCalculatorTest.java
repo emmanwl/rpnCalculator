@@ -27,12 +27,6 @@ public class RpnCalculatorTest {
     }
 
     @Test
-    public void should_raise_exception_when_evaluating_an_operator_free_expression_holding_an_unparsable_string_number() throws Exception {
-        thrown.expect(InvalidRpnSyntaxException.class);
-        rpnCalculator.reduce("1 1 2 3 a");
-    }
-
-    @Test
     public void should_compute_the_simplest_rpn_expression() throws Exception {
         assertThat(rpnCalculator.reduce("1"), is("1"));
     }
@@ -86,4 +80,5 @@ public class RpnCalculatorTest {
     public void should_filter_a_complex_expression() throws Exception {
         assertThat(rpnCalculator.filter("0 1 2 3 4 F2%0= 8 10 12 F2%0="), is("0 2 4 8 10 12"));
     }
+
 }
