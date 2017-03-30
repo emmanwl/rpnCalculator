@@ -1,11 +1,8 @@
 package net.arolla.calculator;
 
-import java.util.ArrayList;
-import java.util.List;
-
 import static com.google.common.base.Preconditions.checkArgument;
 
-public enum RpnFixedArityOperator implements Reduce<String> {
+public enum RpnArithmeticOperator implements Reducer<String> {
 
     ADDITION("+", 2) {
         @Override
@@ -58,11 +55,19 @@ public enum RpnFixedArityOperator implements Reduce<String> {
     private final String symbol;
     private final Integer arity;
 
-    RpnFixedArityOperator(String symbol, Integer arity) {
+    RpnArithmeticOperator(String symbol, Integer arity) {
         checkArgument(symbol != null && !symbol.isEmpty(), "Operator symbol cannot be empty");
         checkArgument(arity > 0, "Operator arity must be greater than 0");
         this.symbol = symbol;
         this.arity = arity;
+    }
+
+    public Integer getArity() {
+        return arity;
+    }
+
+    public String getSymbol() {
+        return symbol;
     }
 
     private static Long longValue(String number) throws InvalidRpnSyntaxException {
@@ -73,35 +78,12 @@ public enum RpnFixedArityOperator implements Reduce<String> {
         }
     }
 
-    public Integer getArity() {
-        return arity;
-    }
-
-    public static RpnFixedArityOperator matchFirst(List<String> tokens) {
-        if (tokens.isEmpty()) {
-            return null;
-        }
-        for (RpnFixedArityOperator operator : values()) {
-            if (operator.symbol.equals(tokens.get(0))) {
-                return operator;
+    public static RpnArithmeticOperator matchSymbol(String symbol) throws InvalidRpnSyntaxException {
+        for (RpnArithmeticOperator op : values()) {
+            if (op.getSymbol().equals(symbol)) {
+                return op;
             }
         }
-        return matchFirst(tokens.subList(1, tokens.size()));
-    }
-
-    public Integer getSymbolIndex(List<String> tokens) throws InvalidRpnSyntaxException {
-        Integer index = tokens.indexOf(symbol);
-        if (index != -1 && index < arity) {
-            throw new InvalidRpnSyntaxException(String.format("Insufficient argument count, expected %d, actual was %d", arity, index));
-        }
-        return index;
-    }
-
-    public List<String> apply(String operand, List<String> tokens) throws InvalidRpnSyntaxException {
-        List<String> results = new ArrayList<>();
-        for (int i = 0; i < tokens.size(); i++) {
-            results.add(this.reduce(tokens.get(i), operand));
-        }
-        return results;
+        throw new InvalidRpnSyntaxException("Could not match reduction symbol " + symbol);
     }
 }

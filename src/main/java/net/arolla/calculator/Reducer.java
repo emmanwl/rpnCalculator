@@ -1,6 +1,6 @@
 package net.arolla.calculator;
 
-interface Reduce<T> {
+interface Reducer<T> {
 
     T reduce(T... args) throws InvalidRpnSyntaxException;
 
