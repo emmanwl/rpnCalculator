@@ -2,31 +2,42 @@ package net.arolla.calculator;
 
 import com.google.common.base.Joiner;
 
-import java.util.ArrayList;
 import java.util.List;
 
 import static java.util.Arrays.asList;
-import static net.arolla.calculator.RpnReductionOperator.evaluate;
 
-public class RpnExpressionEvaluator {
+public final class RpnExpressionEvaluator {
 
+    private static final String RPN_TOKEN_SEPARATOR_REGEXP = "\\s+";
     private static final String RPN_TOKEN_SEPARATOR = " ";
 
-    private List<String> split(String expression) {
-        return asList(expression.split(RPN_TOKEN_SEPARATOR));
+    private final RpnConverter converter;
+
+    public RpnExpressionEvaluator(RpnConverter converter) {
+        this.converter = converter;
     }
 
-    private String join(List<String> tokens) {
+    private static String[] split(String expression) {
+        return expression.split(RPN_TOKEN_SEPARATOR_REGEXP);
+    }
+
+    private static String join(List<String> tokens) {
         return Joiner.on(RPN_TOKEN_SEPARATOR).join(tokens);
     }
 
-    public String reduce(String expression) throws InvalidRpnSyntaxException {
-        List<String> tokens = split(expression);
-        return join(evaluate(tokens));
+    public String compute(String expression) throws InvalidRpnSyntaxException {
+        return compute(split(expression));
     }
 
-    public String filter(String expression) throws InvalidRpnSyntaxException {
-        List<String> tokens = split(expression);
-        return join(RpnFilteringOperator.evaluate(tokens));
+    public String compute(String... tokens) throws InvalidRpnSyntaxException {
+        return join(RpnArithmeticOperator.evaluate(converter, asList(tokens)));
+    }
+
+    public String reduce(String expression) throws InvalidRpnSyntaxException {
+        return reduce(split(expression));
+    }
+
+    public String reduce(String... tokens) throws InvalidRpnSyntaxException {
+        return join(RpnReductionOperator.evaluate(converter, asList(tokens)));
     }
 }

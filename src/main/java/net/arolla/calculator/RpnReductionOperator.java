@@ -2,61 +2,103 @@ package net.arolla.calculator;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
-public class RpnReductionOperator implements Reducer<String> {
+final class RpnReductionOperator {
 
-    private final RpnArithmeticOperator rpnArithmeticOperator;
+    private final RpnConverter converter;
+    private final RpnOperator operator;
+    private final Matcher matcher;
     private final Integer position;
 
-    private RpnReductionOperator(RpnArithmeticOperator rpnArithmeticOperator, Integer position) {
-        this.rpnArithmeticOperator = rpnArithmeticOperator;
+    private RpnReductionOperator(RpnConverter converter, RpnOperator operator, Matcher matcher, int position) {
+        this.converter = converter;
+        this.operator = operator;
+        this.matcher = matcher;
         this.position = position;
     }
 
-    public RpnReductionOperator(RpnArithmeticOperator rpnArithmeticOperator) {
-       this(rpnArithmeticOperator, -1);
+    private interface Operate {
+        List<String> operate(RpnConverter converter, Matcher matcher, List<String> items) throws InvalidRpnSyntaxException;
     }
 
-    private static RpnReductionOperator matchFirst(List<String> tokens, Integer position) {
-        if (tokens.isEmpty()) {
-            return null;
+    private enum RpnOperator implements Operate {
+
+        FILTER(Pattern.compile(RpnOperatorConstants.FILTER_REGULAR_EXPRESSION)) {
+            @Override
+            public List<String> operate(RpnConverter converter, Matcher matcher, List<String> items) throws InvalidRpnSyntaxException {
+                RpnComparisonOperator comparator = new RpnComparisonOperator(converter, matcher.group(6));
+                RpnExpressionEvaluator evaluator = new RpnExpressionEvaluator(converter);
+                List<String> filtered = new ArrayList<>();
+                for (String item : items) {
+                    String result = evaluator.compute(item, matcher.group(1), matcher.group(3));
+                    if (comparator.compare(result, matcher.group(4))) {
+                        filtered.add(item);
+                    }
+                }
+                return filtered;
+            }
+        },
+
+        MAP(Pattern.compile(RpnOperatorConstants.MAP_REGULAR_EXPRESSION)) {
+            @Override
+            public List<String> operate(RpnConverter converter, Matcher matcher, List<String> items) throws InvalidRpnSyntaxException {
+                RpnExpressionEvaluator evaluator = new RpnExpressionEvaluator(converter);
+                List<String> mapped = new ArrayList<>();
+                for (String item : items) {
+                    mapped.add(evaluator.compute(item, matcher.group(1), matcher.group(3)));
+                }
+                return mapped;
+            }
+        };
+
+        private final Pattern pattern;
+
+        RpnOperator(Pattern pattern) {
+            this.pattern = pattern;
         }
-        for (RpnArithmeticOperator op : RpnArithmeticOperator.values()) {
-            if (op.getSymbol().equals(tokens.get(0))) {
-                return new RpnReductionOperator(op, position);
+
+        Matcher matcher(String s) {
+            return pattern.matcher(s);
+        }
+
+        private static class RpnOperatorConstants {
+            private static final String FILTER_REGULAR_EXPRESSION = "^[F]([+-]?(\\d*\\.)?\\d+)([+-/*%])([+-]?(\\d*\\.)?\\d+)(=|<=|>=|>|<|!=)$";
+            private static final String MAP_REGULAR_EXPRESSION = "^[M]([+-]?(\\d*\\.)?\\d+)([+-/*%])$";
+        }
+    }
+
+    private List<String> evaluate(List<String> tokens) throws InvalidRpnSyntaxException {
+        List<String> newTokens = operator.operate(converter, matcher, tokens.subList(0, position));
+        if (position == tokens.size() - 1) {
+            return newTokens;
+        }
+        newTokens.addAll(tokens.subList(position + 1, tokens.size()));
+        return evaluate(converter, newTokens);
+    }
+
+    private static RpnReductionOperator matchFirst(RpnConverter converter, List<String> tokens, int position) {
+        for (RpnOperator operator : RpnOperator.values()) {
+            Matcher matcher = operator.matcher(tokens.get(0));
+            if (matcher.find()) {
+                return new RpnReductionOperator(converter, operator, matcher, position);
             }
         }
-        return matchFirst(tokens.subList(1, tokens.size()), ++position);
+        if (tokens.size() == 1) {
+            return null;
+        }
+        return matchFirst(converter, tokens.subList(1, tokens.size()), ++position);
     }
 
-    private List<String> evaluateWithOperator(List<String> tokens) throws InvalidRpnSyntaxException {
-        if (position != -1 && position < rpnArithmeticOperator.getArity()) {
-            throw new InvalidRpnSyntaxException(String.format("Insufficient argument count, expected %d, actual was %d", rpnArithmeticOperator.getArity(), position));
-        }
-        List<String> newTokens = new ArrayList<>();
-        if (position > rpnArithmeticOperator.getArity()) {
-            newTokens.addAll(tokens.subList(0, position - rpnArithmeticOperator.getArity()));
-        }
-        newTokens.add(reduce(tokens.subList(position - rpnArithmeticOperator.getArity(), position).toArray(new String[rpnArithmeticOperator.getArity()])));
-        if (position < tokens.size() - 1) {
-            newTokens.addAll(tokens.subList(position + 1, tokens.size()));
-        }
-        return evaluate(newTokens);
-    }
-
-    public static List<String> evaluate(List<String> tokens) throws InvalidRpnSyntaxException {
-        if (tokens.size() <= 1) {
+    static List<String> evaluate(RpnConverter converter, List<String> tokens) throws InvalidRpnSyntaxException {
+        if (tokens.isEmpty()) {
             return tokens;
         }
-        RpnReductionOperator operator = matchFirst(tokens, 0);
+        RpnReductionOperator operator = matchFirst(converter, tokens, 0);
         if (operator == null) {
             return tokens;
         }
-        return operator.evaluateWithOperator(tokens);
-    }
-
-    @Override
-    public String reduce(String... args) throws InvalidRpnSyntaxException {
-        return rpnArithmeticOperator.reduce(args);
+        return operator.evaluate(tokens);
     }
 }

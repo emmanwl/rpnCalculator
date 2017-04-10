@@ -1,64 +1,75 @@
 package net.arolla.calculator;
 
-public enum RpnComparisonOperator implements Comparator<String> {
+final class RpnComparisonOperator {
 
-	EQUAL("=") {
-		@Override
-		public boolean compare(String s, String s2) throws InvalidRpnSyntaxException {
-			return longValue(s) == longValue(s2);
-		}
-	},
-	LOWER("<") {
-		@Override
-		public boolean compare(String s, String s2) throws InvalidRpnSyntaxException {
-			return longValue(s) < longValue(s2);
-		}
-	},
-	GREATER(">") {
-		@Override
-		public boolean compare(String s, String s2) throws InvalidRpnSyntaxException {
-			return longValue(s) > longValue(s2);
-		}
-	},
-	DIFFERENT("!=") {
-		@Override
-		public boolean compare(String s, String s2) throws InvalidRpnSyntaxException {
-			return longValue(s) != longValue(s2);
-		}
-	},
-	LOWER_THAN_OR_EQUAL("<=") {
-		@Override
-		public boolean compare(String s, String s2) throws InvalidRpnSyntaxException {
-			return longValue(s) <= longValue(s2);
-		}
-	},
-	GREATER_THAN_OR_EQUAL(">=") {
-		@Override
-		public boolean compare(String s, String s2) throws InvalidRpnSyntaxException {
-			return longValue(s) >= longValue(s2);
-		}
-	};
+    private final RpnConverter converter;
+    private final RpnOperator rpnOperator;
 
-	private final String symbol;
+    RpnComparisonOperator(RpnConverter converter, String symbol) throws InvalidRpnSyntaxException {
+        this.converter = converter;
+        this.rpnOperator = RpnOperator.map(symbol);
+    }
 
-	RpnComparisonOperator(String symbol) {
-		this.symbol = symbol;
-	}
+    private interface Compare {
+        boolean compare(RpnConverter converter, String s, String t) throws InvalidRpnSyntaxException;
+    }
 
-	private static Long longValue(String number) throws InvalidRpnSyntaxException {
-		try {
-			return Long.valueOf(number);
-		} catch (NumberFormatException e) {
-			throw new InvalidRpnSyntaxException(e.getMessage());
-		}
-	}
+    private enum RpnOperator implements Compare {
 
-	public static RpnComparisonOperator matchSymbol(String symbol) throws InvalidRpnSyntaxException {
-		for (RpnComparisonOperator op : values()) {
-			if (op.symbol.equals(symbol)) {
-				return op;
-			}
-		}
-		throw new InvalidRpnSyntaxException("Could not match comparison symbol " + symbol);
-	}
+        EQUAL("=") {
+            @Override
+            public boolean compare(RpnConverter converter, String s, String t) throws InvalidRpnSyntaxException {
+                return converter.convert(s).compareTo(converter.convert(t)) == 0;
+            }
+        },
+        LOWER("<") {
+            @Override
+            public boolean compare(RpnConverter converter, String s, String t) throws InvalidRpnSyntaxException {
+                return converter.convert(s).compareTo(converter.convert(t)) < 0;
+            }
+        },
+        GREATER(">") {
+            @Override
+            public boolean compare(RpnConverter converter, String s, String t) throws InvalidRpnSyntaxException {
+                return converter.convert(s).compareTo(converter.convert(t)) > 0;
+            }
+        },
+        DIFFERENT("!=") {
+            @Override
+            public boolean compare(RpnConverter converter, String s, String t) throws InvalidRpnSyntaxException {
+                return converter.convert(s).compareTo(converter.convert(t)) != 0;
+            }
+        },
+        LOWER_THAN_OR_EQUAL("<=") {
+            @Override
+            public boolean compare(RpnConverter converter, String s, String t) throws InvalidRpnSyntaxException {
+                return converter.convert(s).compareTo(converter.convert(t)) <= 0;
+            }
+        },
+        GREATER_THAN_OR_EQUAL(">=") {
+            @Override
+            public boolean compare(RpnConverter converter, String s, String t) throws InvalidRpnSyntaxException {
+                return converter.convert(s).compareTo(converter.convert(t)) >= 0;
+            }
+        };
+
+        private final String symbol;
+
+        RpnOperator(String symbol) {
+            this.symbol = symbol;
+        }
+
+        static RpnOperator map(String symbol) throws InvalidRpnSyntaxException {
+            for (RpnOperator operator : values()) {
+                if (operator.symbol.equals(symbol)) {
+                    return operator;
+                }
+            }
+            throw new InvalidRpnSyntaxException("Could not map comparison symbol " + symbol);
+        }
+    }
+
+    boolean compare(String s, String t) throws InvalidRpnSyntaxException {
+        return rpnOperator.compare(converter, s, t);
+    }
 }

@@ -1,89 +1,122 @@
 package net.arolla.calculator;
 
-import static com.google.common.base.Preconditions.checkArgument;
+import java.util.ArrayList;
+import java.util.List;
 
-public enum RpnArithmeticOperator implements Reducer<String> {
+final class RpnArithmeticOperator {
 
-    ADDITION("+", 2) {
-        @Override
-        public String reduce(String... args) throws InvalidRpnSyntaxException {
-            return String.valueOf(longValue(args[0]) + longValue(args[1]));
-        }
-    },
-    SUBSTRACTION("-", 2) {
-        @Override
-        public String reduce(String... args) throws InvalidRpnSyntaxException {
-            return String.valueOf(longValue(args[0]) - longValue(args[1]));
-        }
-    },
-    MULTIPLICATION("*", 2) {
-        @Override
-        public String reduce(String... args) throws InvalidRpnSyntaxException {
-            return String.valueOf(longValue(args[0]) * longValue(args[1]));
-        }
-    },
-    DIVISION("/", 2) {
-        @Override
-        public String reduce(String... args) throws InvalidRpnSyntaxException {
-            Long numerator = longValue(args[0]);
-            Long denominator = longValue(args[1]);
-            if (denominator == 0) {
-                return String.valueOf(Long.signum(numerator) == -1 ? Long.MIN_VALUE : Long.MAX_VALUE);
+    private final RpnConverter converter;
+    private final RpnOperator operator;
+    private final Integer position;
+
+    private RpnArithmeticOperator(RpnConverter converter, RpnOperator operator, Integer position) throws InvalidRpnSyntaxException {
+        this.converter = converter;
+        this.operator = operator;
+        this.position = position;
+    }
+
+    private interface Compute {
+        String compute(RpnConverter converter, String... args) throws InvalidRpnSyntaxException;
+    }
+
+    private enum RpnOperator implements Compute {
+
+        ADDITION("+", 2) {
+            @Override
+            public String compute(RpnConverter converter, String... args) throws InvalidRpnSyntaxException {
+                return converter.reverseConvert(converter.convert(args[0]) + converter.convert(args[1]));
             }
-            return String.valueOf(numerator / denominator);
-        }
-    },
-    INCREMENT("++", 1) {
-        @Override
-        public String reduce(String... args) throws InvalidRpnSyntaxException {
-            return String.valueOf(longValue(args[0]) + 1);
-        }
-    },
-    DECREMENT("--", 1) {
-        @Override
-        public String reduce(String... args) throws InvalidRpnSyntaxException {
-            return String.valueOf(longValue(args[0]) - 1);
-        }
-    },
-    MODULO("%", 2) {
-        @Override
-        public String reduce(String... args) throws InvalidRpnSyntaxException {
-            return String.valueOf(longValue(args[0]) % longValue(args[1]));
-        }
-    };
+        },
+        SUBSTRACTION("-", 2) {
+            @Override
+            public String compute(RpnConverter converter, String... args) throws InvalidRpnSyntaxException {
+                return converter.reverseConvert(converter.convert(args[0]) - converter.convert(args[1]));
+            }
+        },
+        MULTIPLICATION("*", 2) {
+            @Override
+            public String compute(RpnConverter converter, String... args) throws InvalidRpnSyntaxException {
+                return converter.reverseConvert(converter.convert(args[0]) * converter.convert(args[1]));
+            }
+        },
+        DIVISION("/", 2) {
+            @Override
+            public String compute(RpnConverter converter, String... args) throws InvalidRpnSyntaxException {
+                return converter.reverseConvert(converter.convert(args[0]) / converter.convert(args[1]));
+            }
+        },
+        INCREMENT("++", 1) {
+            @Override
+            public String compute(RpnConverter converter, String... args) throws InvalidRpnSyntaxException {
+                return converter.reverseConvert(converter.convert(args[0]) + 1);
+            }
+        },
+        DECREMENT("--", 1) {
+            @Override
+            public String compute(RpnConverter converter, String... args) throws InvalidRpnSyntaxException {
+                return converter.reverseConvert(converter.convert(args[0]) - 1);
+            }
+        },
+        MODULO("%", 2) {
+            @Override
+            public String compute(RpnConverter converter, String... args) throws InvalidRpnSyntaxException {
+                return converter.reverseConvert(converter.convert(args[0]) % converter.convert(args[1]));
+            }
+        };
 
-    private final String symbol;
-    private final Integer arity;
+        private final String symbol;
+        private final Integer arity;
 
-    RpnArithmeticOperator(String symbol, Integer arity) {
-        checkArgument(symbol != null && !symbol.isEmpty(), "Operator symbol cannot be empty");
-        checkArgument(arity > 0, "Operator arity must be greater than 0");
-        this.symbol = symbol;
-        this.arity = arity;
+        RpnOperator(String symbol, Integer arity) {
+            this.symbol = symbol;
+            this.arity = arity;
+        }
+
+        Integer getArity() {
+            return arity;
+        }
     }
 
-    public Integer getArity() {
-        return arity;
-    }
-
-    public String getSymbol() {
-        return symbol;
-    }
-
-    private static Long longValue(String number) throws InvalidRpnSyntaxException {
-        try {
-            return Long.valueOf(number);
-        } catch (NumberFormatException e) {
-            throw new InvalidRpnSyntaxException(e.getMessage());
-        }
-    }
-
-    public static RpnArithmeticOperator matchSymbol(String symbol) throws InvalidRpnSyntaxException {
-        for (RpnArithmeticOperator op : values()) {
-            if (op.getSymbol().equals(symbol)) {
-                return op;
+    private static RpnArithmeticOperator matchFirst(RpnConverter converter, List<String> tokens, Integer position) throws InvalidRpnSyntaxException {
+        for (RpnOperator operator : RpnOperator.values()) {
+            if (operator.symbol.equals(tokens.get(0))) {
+                return new RpnArithmeticOperator(converter, operator, position);
             }
         }
-        throw new InvalidRpnSyntaxException("Could not match reduction symbol " + symbol);
+        if (tokens.size() == 1) {
+            return null;
+        }
+        return matchFirst(converter, tokens.subList(1, tokens.size()), ++position);
+    }
+
+    private List<String> evaluate(List<String> tokens) throws InvalidRpnSyntaxException {
+        if (position != -1 && position < operator.getArity()) {
+            throw new InvalidRpnSyntaxException(String.format("Insufficient argument count, expected %d, actual was %d", operator.getArity(), position));
+        }
+        List<String> newTokens = new ArrayList<>();
+        if (position > operator.getArity()) {
+            newTokens.addAll(tokens.subList(0, position - operator.getArity()));
+        }
+
+        newTokens.add(compute(tokens.subList(position - operator.getArity(), position).toArray(new String[operator.getArity()])));
+        if (position < tokens.size() - 1) {
+            newTokens.addAll(tokens.subList(position + 1, tokens.size()));
+        }
+        return evaluate(converter, newTokens);
+    }
+
+    static List<String> evaluate(RpnConverter converter, List<String> tokens) throws InvalidRpnSyntaxException {
+        if (tokens.isEmpty()) {
+            return tokens;
+        }
+        RpnArithmeticOperator operator = matchFirst(converter, tokens, 0);
+        if (operator == null) {
+            return tokens;
+        }
+        return operator.evaluate(tokens);
+    }
+
+    String compute(String... args) throws InvalidRpnSyntaxException {
+        return operator.compute(converter, args);
     }
 }
