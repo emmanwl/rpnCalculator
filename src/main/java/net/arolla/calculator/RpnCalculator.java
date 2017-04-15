@@ -5,7 +5,7 @@ import static com.google.common.base.Preconditions.checkNotNull;
 
 public final class RpnCalculator {
 
-    private final RpnExpressionEvaluator evaluator = new RpnExpressionEvaluator(new RpnConverter());
+    private final RpnExpressionEvaluator evaluator = new RpnExpressionEvaluator(new RpnConverter.RpnLongConverter());
 
     public String compute(String expression) throws InvalidRpnSyntaxException {
         checkNotNull(expression);

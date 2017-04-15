@@ -109,5 +109,4 @@ public class RpnCalculatorTest {
     public void should_reduce_an_operand_free_expression() throws Exception {
         assertThat(rpnCalculator.reduce("F2%0= M2*"), is(""));
     }
-
 }

@@ -1,18 +1,25 @@
 package net.arolla.calculator;
 
-final class RpnConverter implements Converter<Long> {
+interface RpnConverter<N extends Number> {
 
-    @Override
-     public Long convert(String s) throws InvalidRpnSyntaxException {
-        try {
-            return Long.valueOf(s);
-        } catch (NumberFormatException e) {
-            throw new InvalidRpnSyntaxException(e);
+    N convert(String s) throws InvalidRpnSyntaxException;
+
+    String reverseConvert(N n);
+
+    final class RpnLongConverter implements RpnConverter<Long> {
+
+        @Override
+         public Long convert(String s) throws InvalidRpnSyntaxException {
+            try {
+                return Long.valueOf(s);
+            } catch (NumberFormatException e) {
+                throw new InvalidRpnSyntaxException(e);
+            }
         }
-    }
 
-    @Override
-    public String reverseConvert(Long l) throws InvalidRpnSyntaxException {
-        return String.valueOf(l);
+        @Override
+        public String reverseConvert(Long l) {
+            return String.valueOf(l);
+        }
     }
 }

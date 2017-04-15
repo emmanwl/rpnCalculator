@@ -1,40 +1,40 @@
 package net.arolla.calculator;
 
+import net.arolla.calculator.RpnConverter.RpnLongConverter;
+
 import java.util.ArrayList;
 import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import static java.util.Arrays.asList;
+import static net.arolla.calculator.RpnEvaluationContext.builder;
+
 final class RpnReductionOperator {
 
-    private final RpnConverter converter;
-    private final RpnOperator operator;
-    private final Matcher matcher;
+    private final RpnEvaluationContext context;
+    private final RpnReductionOperatorImpl impl;
     private final Integer position;
 
-    private RpnReductionOperator(RpnConverter converter, RpnOperator operator, Matcher matcher, int position) {
-        this.converter = converter;
-        this.operator = operator;
-        this.matcher = matcher;
+    private RpnReductionOperator(RpnEvaluationContext context, RpnReductionOperatorImpl impl, int position) {
+        this.context = context;
+        this.impl = impl;
         this.position = position;
     }
 
-    private interface Operate {
-        List<String> operate(RpnConverter converter, Matcher matcher, List<String> items) throws InvalidRpnSyntaxException;
-    }
-
-    private enum RpnOperator implements Operate {
+    private enum RpnReductionOperatorImpl implements RpnOperator<List<String>> {
 
         FILTER(Pattern.compile(RpnOperatorConstants.FILTER_REGULAR_EXPRESSION)) {
             @Override
-            public List<String> operate(RpnConverter converter, Matcher matcher, List<String> items) throws InvalidRpnSyntaxException {
-                RpnComparisonOperator comparator = new RpnComparisonOperator(converter, matcher.group(6));
+            public List<String> operate(RpnEvaluationContext context, List<String> args) throws InvalidRpnSyntaxException {
+                RpnLongConverter converter = context.getRpnConverter();
+                Matcher matcher = context.getMatcher();
                 RpnExpressionEvaluator evaluator = new RpnExpressionEvaluator(converter);
                 List<String> filtered = new ArrayList<>();
-                for (String item : items) {
-                    String result = evaluator.compute(item, matcher.group(1), matcher.group(3));
-                    if (comparator.compare(result, matcher.group(4))) {
-                        filtered.add(item);
+                for (String arg : args) {
+                    String result = evaluator.compute(arg, matcher.group(1), matcher.group(3));
+                    if (RpnComparisonOperator.evaluate(converter, asList(result, matcher.group(4), matcher.group(6)))) {
+                        filtered.add(arg);
                     }
                 }
                 return filtered;
@@ -43,11 +43,13 @@ final class RpnReductionOperator {
 
         MAP(Pattern.compile(RpnOperatorConstants.MAP_REGULAR_EXPRESSION)) {
             @Override
-            public List<String> operate(RpnConverter converter, Matcher matcher, List<String> items) throws InvalidRpnSyntaxException {
+            public List<String> operate(RpnEvaluationContext context, List<String> args) throws InvalidRpnSyntaxException {
+                RpnLongConverter converter = context.getRpnConverter();
+                Matcher matcher = context.getMatcher();
                 RpnExpressionEvaluator evaluator = new RpnExpressionEvaluator(converter);
                 List<String> mapped = new ArrayList<>();
-                for (String item : items) {
-                    mapped.add(evaluator.compute(item, matcher.group(1), matcher.group(3)));
+                for (String arg : args) {
+                    mapped.add(evaluator.compute(arg, matcher.group(1), matcher.group(3)));
                 }
                 return mapped;
             }
@@ -55,12 +57,8 @@ final class RpnReductionOperator {
 
         private final Pattern pattern;
 
-        RpnOperator(Pattern pattern) {
+        RpnReductionOperatorImpl(Pattern pattern) {
             this.pattern = pattern;
-        }
-
-        Matcher matcher(String s) {
-            return pattern.matcher(s);
         }
 
         private static class RpnOperatorConstants {
@@ -70,19 +68,19 @@ final class RpnReductionOperator {
     }
 
     private List<String> evaluate(List<String> tokens) throws InvalidRpnSyntaxException {
-        List<String> newTokens = operator.operate(converter, matcher, tokens.subList(0, position));
+        List<String> newTokens = impl.operate(context, tokens.subList(0, position));
         if (position == tokens.size() - 1) {
             return newTokens;
         }
         newTokens.addAll(tokens.subList(position + 1, tokens.size()));
-        return evaluate(converter, newTokens);
+        return newTokens;
     }
 
-    private static RpnReductionOperator matchFirst(RpnConverter converter, List<String> tokens, int position) {
-        for (RpnOperator operator : RpnOperator.values()) {
-            Matcher matcher = operator.matcher(tokens.get(0));
+    private static RpnReductionOperator matchFirst(RpnLongConverter converter, List<String> tokens, int position) {
+        for (RpnReductionOperatorImpl operator : RpnReductionOperatorImpl.values()) {
+            Matcher matcher = operator.pattern.matcher(tokens.get(0));
             if (matcher.find()) {
-                return new RpnReductionOperator(converter, operator, matcher, position);
+                return new RpnReductionOperator(builder(converter).withMatcher(matcher).build(), operator, position);
             }
         }
         if (tokens.size() == 1) {
@@ -91,7 +89,7 @@ final class RpnReductionOperator {
         return matchFirst(converter, tokens.subList(1, tokens.size()), ++position);
     }
 
-    static List<String> evaluate(RpnConverter converter, List<String> tokens) throws InvalidRpnSyntaxException {
+    static List<String> evaluate(RpnLongConverter converter, List<String> tokens) throws InvalidRpnSyntaxException {
         if (tokens.isEmpty()) {
             return tokens;
         }
@@ -99,6 +97,6 @@ final class RpnReductionOperator {
         if (operator == null) {
             return tokens;
         }
-        return operator.evaluate(tokens);
+        return evaluate(converter, operator.evaluate(tokens));
     }
 }
